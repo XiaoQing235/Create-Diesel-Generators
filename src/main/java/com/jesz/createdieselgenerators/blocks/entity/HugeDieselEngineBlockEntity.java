@@ -83,47 +83,68 @@ public class HugeDieselEngineBlockEntity extends SmartBlockEntity implements IHa
     public void tick() {
         super.tick();
         PoweredEngineShaftBlockEntity shaft = getShaft();
-        if (shaft == null)
-            return;
-        if(getBlockState().getValue(POWERED))
-            validFuel = false;
-        else
-            validFuel = FuelTypeManager.getGeneratedSpeed(this, tank.getPrimaryHandler().getFluid().getFluid()) != 0;
+        if (shaft == null) return;
+
+        // Check if block is powered and set fuel validity
+        boolean isPowered = getBlockState().getValue(POWERED);
+        validFuel = !isPowered && FuelTypeManager.getGeneratedSpeed(this, tank.getPrimaryHandler().getFluid().getFluid()) != 0;
+
+        // Increment partial second counter
         partialSecond++;
-        if(partialSecond >= 20){
+        if (partialSecond >= 20) {
             partialSecond = 0;
-            if(validFuel) {
-                if(tank.getPrimaryHandler().getFluid().getAmount() >= FuelTypeManager.getBurnRate(this, tank.getPrimaryHandler().getFluid().getFluid()))
-                    tank.getPrimaryHandler().setFluid(FluidHelper.copyStackWithAmount(tank.getPrimaryHandler().getFluid(),
-                            tank.getPrimaryHandler().getFluid().getAmount() - FuelTypeManager.getBurnRate(this, tank.getPrimaryHandler().getFluid().getFluid())));
-                else
+            if (validFuel) {
+                FluidStack fluid = tank.getPrimaryHandler().getFluid();
+                int burnRate = FuelTypeManager.getBurnRate(this, fluid.getFluid());
+                if (fluid.getAmount() >= burnRate) {
+                    tank.getPrimaryHandler().setFluid(FluidHelper.copyStackWithAmount(fluid, fluid.getAmount() - burnRate));
+                } else {
                     tank.getPrimaryHandler().setFluid(FluidStack.EMPTY);
+                }
             }
         }
-        if(validFuel) {
-            if(shaft.movementDirection != 0 && shaft.movementDirection != (movementDirection.get() == WindmillBearingBlockEntity.RotationDirection.CLOCKWISE ? 1 : -1)){
-                shaft.removeGenerator(worldPosition);
-                onDirectionChanged();
-                return;
-            }
-            shaft.update(worldPosition, movementDirection.get() == WindmillBearingBlockEntity.RotationDirection.CLOCKWISE ? 1 : -1, FuelTypeManager.getGeneratedStress(this, tank.getPrimaryHandler().getFluid().getFluid()), FuelTypeManager.getGeneratedSpeed(this, tank.getPrimaryHandler().getFluid().getFluid()));
-            if(!level.isClientSide)
-                return;
-            Float angle = getTargetAngle();
-            if (angle == null)
-                return;
-            angle = (float) (angle*180/Math.PI);
-            angle = angle < 0 ? 360-angle : angle;
-            Direction facing = getBlockState().getValue(FACING);
-            float shaftR = facing == Direction.NORTH ? 180 : facing == Direction.SOUTH ? 0 : facing == Direction.EAST ? 0 : facing == Direction.WEST ? 180 : facing == Direction.DOWN ? 90 : -90;
 
-            if((oldAngle+shaftR) % 360 > (angle+shaftR) % 360) {
-                level.playLocalSound(worldPosition.getX(), worldPosition.getY(), worldPosition.getZ(), SoundRegistry.DIESEL_ENGINE_SOUND.get(), SoundSource.BLOCKS, 1f,1f, false);
-            }
-            oldAngle = angle;
-
-        }else{
+        // Exit early if fuel is invalid
+        if (!validFuel) {
             shaft.removeGenerator(worldPosition);
+            return;
+        }
+
+        // Determine new state values
+        int newDirection = (movementDirection.get() == WindmillBearingBlockEntity.RotationDirection.CLOCKWISE) ? 1 : -1;
+        FluidStack fluid = tank.getPrimaryHandler().getFluid();
+        float newSpeed = FuelTypeManager.getGeneratedSpeed(this, fluid.getFluid());
+        float newStress = FuelTypeManager.getGeneratedStress(this, fluid.getFluid());
+
+        // Check for state changes
+        boolean stateChanged = shaft.movementDirection != newDirection || shaft.getSpeed() != newSpeed;
+        if (stateChanged) {
+            shaft.update(worldPosition, newDirection, newStress, newSpeed);
+        }
+
+        // Client-side operations
+        if (level.isClientSide) {
+            Float angle = getTargetAngle();
+            if (angle != null) {
+                angle = (float) Math.toDegrees(angle);
+                angle = (angle < 0) ? 360 - angle : angle;
+
+                Direction facing = getBlockState().getValue(FACING);
+                float shaftR = switch (facing) {
+                    case NORTH -> 180;
+                    case SOUTH -> 0;
+                    case EAST, WEST -> 0;
+                    case DOWN -> 90;
+                    default -> -90;
+                };
+
+                // Play sound if angle changes significantly
+                if ((oldAngle + shaftR) % 360 > (angle + shaftR) % 360) {
+                    level.playLocalSound(worldPosition.getX(), worldPosition.getY(), worldPosition.getZ(),
+                            SoundRegistry.DIESEL_ENGINE_SOUND.get(), SoundSource.BLOCKS, 1f, 1f, false);
+                }
+                oldAngle = angle;
+            }
         }
     }
 
