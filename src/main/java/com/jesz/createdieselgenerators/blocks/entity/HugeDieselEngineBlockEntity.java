@@ -89,6 +89,11 @@ public class HugeDieselEngineBlockEntity extends SmartBlockEntity implements IHa
         boolean isPowered = getBlockState().getValue(POWERED);
         validFuel = !isPowered && FuelTypeManager.getGeneratedSpeed(this, tank.getPrimaryHandler().getFluid().getFluid()) != 0;
 
+        // Exit early if fuel is invalid
+        if (!validFuel) {
+            shaft.removeGenerator(worldPosition);
+            return;
+        }
         // Increment partial second counter
         partialSecond++;
         if (partialSecond >= 20) {
@@ -102,12 +107,6 @@ public class HugeDieselEngineBlockEntity extends SmartBlockEntity implements IHa
                     tank.getPrimaryHandler().setFluid(FluidStack.EMPTY);
                 }
             }
-        }
-
-        // Exit early if fuel is invalid
-        if (!validFuel) {
-            shaft.removeGenerator(worldPosition);
-            return;
         }
 
         // Determine new state values
