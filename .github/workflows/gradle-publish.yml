@@ -37,6 +37,8 @@ jobs:
         server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
         settings-path: ${{ github.workspace }} # location for the settings.xml file
 
+        cache-cleanup: always
+
     #- name: Cache Gradle dependencies
     #  uses: actions/cache@v3
     #  with:
